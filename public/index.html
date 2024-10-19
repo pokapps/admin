@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Agadir Poker Room - Tableau de Bord</title>
+    <!-- Font Awesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <!-- Chart.js for graphs -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap');
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: #f0f2f5;
+            color: #333;
+            padding-top: 80px;
+        }
+
+        h1 {
+            text-align: center;
+            margin: 20px 0;
+            color: #007bff;
+        }
+
+        .navbar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background-color: #343a40;
+            padding: 10px 0;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            z-index: 1000;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .tab-navigation ul {
+            display: flex;
+            justify-content: space-around;
+            gap: 20px;
+            list-style-type: none;
+        }
+
+        .tab-navigation a {
+            text-decoration: none;
+            padding: 15px 40px;
+            border-radius: 8px;
+            font-size: 16px;
+            color: white;
+            text-align: center;
+            transition: background-color 0.3s ease, transform 0.3s ease;
+        }
+
+        .tab-navigation a:hover {
+            transform: translateY(-5px) scale(1.05);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .button.cash-game {
+            background-color: #007bff;
+        }
+
+        .button.tournois {
+            background-color: #28a745;
+        }
+
+        .button.database {
+            background-color: #17a2b8;
+        }
+
+        .button.message {
+            background-color: #ffc107;
+        }
+
+        .button.deconnexion {
+            background-color: #dc3545;
+        }
+
+        .stats-section {
+            margin: 50px 0;
+            text-align: center;
+        }
+
+        canvas {
+            max-width: 600px;
+            margin: 20px auto;
+        }
+
+        .filters, .chart-control {
+            margin-top: 20px;
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .filters button, .chart-control button {
+            padding: 10px 15px;
+            border: none;
+            border-radius: 5px;
+            background-color: #007bff;
+            color: white;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        .filters button:hover, .chart-control button:hover {
+            background-color: #0056b3;
+        }
+    </style>
+</head>
+<body>
+    <!-- Fixed Navigation Bar -->
+    <div class="navbar">
+        <div class="container">
+            <div class="tab-navigation">
+                <ul>
+                    <li><a href="cash-game.html" class="button cash-game"><i class="fas fa-coins"></i>Cash Game</a></li>
+                    <li><a href="tournois.html" class="button tournois"><i class="fas fa-trophy"></i>Tournois</a></li>
+                    <li><a href="database.html" class="button database"><i class="fas fa-database"></i>Database</a></li>
+                    <li><a href="message.html" class="button message"><i class="fas fa-envelope"></i>Message</a></li>
+                    <li><a href="#" class="button deconnexion" id="logoutBtn"><i class="fas fa-sign-out-alt"></i>Déconnexion</a></li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="container">
+        <h1>Agadir Poker Room</h1>
+
+        <!-- Section statistiques -->
+        <div class="stats-section">
+            <h2>Statistiques</h2>
+
+            <!-- Filter Buttons -->
+            <div class="filters">
+                <button onclick="updateChart('6mois')">6 derniers mois</button>
+                <button onclick="updateChart('12mois')">12 derniers mois</button>
+                <button onclick="updateChart('1mois')">Dernier mois</button>
+                <button onclick="updateChart('7jours')">Derniers 7 jours</button>
+            </div>
+
+            <canvas id="statsChart1"></canvas>
+
+            <!-- Control panel for changing chart type -->
+            <div class="chart-control">
+                <button onclick="changeChartType('bar')">Graphique en Barres</button>
+                <button onclick="changeChartType('line')">Graphique en Lignes</button>
+                <button onclick="changeChartType('radar')">Graphique Radar</button>
+            </div>
+
+            <h2>Répartition des Activités</h2>
+            <canvas id="statsChart2"></canvas>
+        </div>
+    </div>
+
+    <script>
+        // Vérifier si le token JWT est présent au chargement de la page
+        document.addEventListener('DOMContentLoaded', () => {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                window.location.href = '/login.html'; // Rediriger vers la page de connexion si pas de token
+            }
+        });
+
+        let statsChart1;
+
+        // Fonction pour mettre à jour le graphique en fonction de la période
+        function updateChart(period) {
+            // Simuler un appel API avec des données
+            const data = {
+                '6mois': [5000, 4000, 6000, 7000, 8000, 7500],
+                '12mois': [5000, 4000, 6000, 7000, 8000, 7500, 8500, 9000, 9200, 8500, 7800, 8300],
+                '1mois': [7800],
+                '7jours': [900, 850, 950, 1000, 970, 1020, 1100] // Données simulées pour les 7 derniers jours
+            };
+
+            // Modifier les labels en fonction de la période sélectionnée
+            let labels = [];
+            if (period === '7jours') {
+                labels = ['Jour 1', 'Jour 2', 'Jour 3', 'Jour 4', 'Jour 5', 'Jour 6', 'Jour 7']; // Labels pour les 7 derniers jours
+            } else {
+                labels = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun']; // Par défaut pour les mois
+            }
+
+            statsChart1.data.labels = labels;
+            statsChart1.data.datasets[0].data = data[period] || [];
+            statsChart1.update();
+        }
+
+        function changeChartType(type) {
+            statsChart1.config.type = type;
+            statsChart1.update();
+        }
+
+        window.onload = function() {
+            const ctx1 = document.getElementById('statsChart1').getContext('2d');
+            statsChart1 = new Chart(ctx1, {
+                type: 'bar',
+                data: {
+                    labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
+                    datasets: [{
+                        label: 'Revenus',
+                        data: [5000, 4000, 6000, 7000, 8000, 7500],
+                        backgroundColor: '#007bff',
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                        },
+                    }
+                }
+            });
+
+            const ctx2 = document.getElementById('statsChart2').getContext('2d');
+            new Chart(ctx2, {
+                type: 'pie',
+                data: {
+                    labels: ['Cash Game', 'Tournois', 'Autres'],
+                    datasets: [{
+                        data: [50, 35, 15],
+                        backgroundColor: ['#007bff', '#28a745', '#ffc107'],
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                        },
+                    }
+                }
+            });
+        }
+
+        // Fonction de déconnexion
+        document.getElementById('logoutBtn').addEventListener('click', () => {
+            localStorage.removeItem('token'); // Supprimer le token
+            window.location.href = '/login.html'; // Rediriger vers la page de connexion
+        });
+    </script>
+</body>
+</html>

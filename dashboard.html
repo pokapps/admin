@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tableau de Bord - Gestion de Poker</title>
+    <!-- Font Awesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <!-- Chart.js for graphs -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js" defer></script>
+
+    <style>
+        /* Google Fonts */
+        @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;700&display=swap');
+        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: #f0f2f5;
+            color: #333;
+            padding-top: 80px; /* Adjust for fixed navbar */
+        }
+
+        h1 {
+            text-align: center;
+            margin: 20px 0;
+            color: #007bff;
+        }
+
+        .navbar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            background-color: #343a40;
+            padding: 10px 0;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            z-index: 1000;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .tab-navigation ul {
+            display: flex;
+            justify-content: space-around;
+            gap: 20px;
+            list-style-type: none;
+        }
+
+        .tab-navigation a {
+            text-decoration: none;
+            padding: 15px 40px;
+            border-radius: 8px;
+            font-size: 16px;
+            color: white;
+            text-align: center;
+            transition: background-color 0.3s ease, transform 0.3s ease;
+        }
+
+        .tab-navigation a:hover {
+            transform: translateY(-5px) scale(1.05);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        }
+
+        .tab-navigation a.button {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .button.cash-game {
+            background-color: #007bff;
+        }
+
+        .button.tournois {
+            background-color: #28a745;
+        }
+
+        .button.database {
+            background-color: #17a2b8;
+        }
+
+        .button.message {
+            background-color: #ffc107;
+            position: relative;
+        }
+
+        .button.deconnexion {
+            background-color: #dc3545;
+        }
+
+        .button.message.blinking {
+            animation: blink 1s infinite;
+        }
+
+        @keyframes blink {
+            0% { background-color: #ffc107; }
+            50% { background-color: #ff8800; }
+            100% { background-color: #ffc107; }
+        }
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .tab-navigation ul {
+                flex-direction: column;
+                align-items: center;
+            }
+
+            .tab-navigation a {
+                width: 100%;
+                max-width: 300px;
+            }
+        }
+
+        /* Section statistiques */
+        .stats-section {
+            margin: 50px 0;
+            text-align: center;
+        }
+
+        canvas {
+            max-width: 600px;
+            margin: 20px auto;
+        }
+
+        /* Filter buttons */
+        .filters {
+            margin: 20px 0;
+            display: flex;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .filters button {
+            padding: 10px 20px;
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        .filters button:hover {
+            background-color: #0056b3;
+        }
+
+        /* Control panel for changing chart types */
+        .chart-control {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-top: 20px;
+        }
+
+        .chart-control button {
+            padding: 10px 15px;
+            border: none;
+            border-radius: 5px;
+            background-color: #17a2b8;
+            color: white;
+            cursor: pointer;
+            transition: background-color 0.3s ease;
+        }
+
+        .chart-control button:hover {
+            background-color: #138496;
+        }
+    </style>
+    <script>
+        let statsChart1;
+
+        // Filtre des données de revenus en fonction de la période
+        function updateChart(period) {
+            fetch(`http://localhost:3000/api/revenus?period=${period}`) // Simulating async API call
+                .then(response => response.json())
+                .then(data => {
+                    statsChart1.data.datasets[0].data = data.values;
+                    statsChart1.update();
+                })
+                .catch(error => console.error("Erreur de chargement des données :", error));
+        }
+
+        // Change le type de graphique
+        function changeChartType(type) {
+            statsChart1.config.type = type;
+            statsChart1.update();
+        }
+
+        window.onload = function() {
+            // Initialiser les données
+            const initialData = {
+                labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul'],
+                datasets: [{
+                    label: 'Revenus',
+                    data: [5000, 4000, 6000, 7000, 8000, 7500, 8500],
+                    backgroundColor: '#007bff',
+                }]
+            };
+
+            // Graphique de statistiques 1 avec animations personnalisées
+            var ctx1 = document.getElementById('statsChart1').getContext('2d');
+            statsChart1 = new Chart(ctx1, {
+                type: 'bar',
+                data: initialData,
+                options: {
+                    responsive: true,
+                    animation: {
+                        duration: 2000,
+                        easing: 'easeOutBounce'
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                        },
+                    }
+                }
+            });
+
+            // Graphique de statistiques 2
+            var ctx2 = document.getElementById('statsChart2').getContext('2d');
+            new Chart(ctx2, {
+                type: 'pie',
+                data: {
+                    labels: ['Cash Game', 'Tournois', 'Autres'],
+                    datasets: [{
+                        label: 'Activité',
+                        data: [50, 35, 15],
+                        backgroundColor: ['#007bff', '#28a745', '#ffc107'],
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    animation: {
+                        duration: 1500,
+                        easing: 'easeInOutQuad'
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                        },
+                    }
+                }
+            });
+        }
+    </script>
+</head>
+<body>
+    <!-- Fixed Navigation Bar -->
+    <div class="navbar">
+        <div class="container">
+            <div class="tab-navigation">
+                <ul>
+                    <li><a href="cash_game/cash_game_dashboard.html" class="button cash-game"><i class="fas fa-coins"></i>Cash Game</a></li>
+                    <li><a href="tournois.html" class="button tournois"><i class="fas fa-trophy"></i>Tournois</a></li>
+                    <li><a href="Database.html" class="button database"><i class="fas fa-database"></i>Database</a></li>
+                    <li><a href="messages.html" class="button message"><i class="fas fa-envelope"></i>Message</a></li>
+                    <li><a href="deconnexion.html" class="button deconnexion"><i class="fas fa-sign-out-alt"></i>Déconnexion</a></li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="container">
+        <h1>Agadir Poker Room</h1>
+        
+        <!-- Section statistiques -->
+        <div class="stats-section">
+            <h2>Statistiques Mensuelles</h2>
+
+            <!-- Filter Buttons -->
+            <div class="filters">
+                <button onclick="updateChart('6mois')">6 derniers mois</button>
+                <button onclick="updateChart('12mois')">12 derniers mois</button>
+            </div>
+
+            <canvas id="statsChart1"></canvas>
+            
+            <!-- Control panel for changing chart type -->
+            <div class="chart-control">
+                <button onclick="changeChartType('bar')">Graphique en Barres</button>
+                <button onclick="changeChartType('line')">Graphique en Lignes</button>
+                <button onclick="changeChartType('radar')">Graphique Radar</button>
+            </div>
+
+            <h2>Répartition des Activités</h2>
+            <canvas id="statsChart2"></canvas>
+        </div>
+    </div>
+</body>
+</html>

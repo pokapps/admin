@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cash Game - Gestion des Tables et Joueurs</title>
+    <link rel="stylesheet" href="css/cash_game.css">
+</head>
+<body>
+    <header>
+        <h1>Cash Game - Gestion des Tables et Joueurs</h1>
+        <div class="admin-buttons">
+            <button id="create-table">Créer Table</button>
+            <button id="create-player">Créer Joueur</button>
+            <button id="exit">Exit</button>
+        </div>
+    </header>
+
+    <main>
+        <div class="waitlist">
+            <h2>Liste d'attente</h2>
+            <button id="add-waitlist">S'inscrire à la liste d'attente</button>
+            <ul id="waitlist-players">
+                <!-- Liste des joueurs en attente -->
+            </ul>
+        </div>
+
+        <div class="tables-grid">
+            <!-- Grille dynamique des tables -->
+        </div>
+
+        <div class="seats-info">
+            <h2>Tables et Sièges</h2>
+            <div id="seats-tables">
+                <!-- Affichage des sièges et des tables -->
+            </div>
+        </div>
+    </main>
+
+    <!-- Formulaire modal pour créer une table -->
+    <div id="createTableModal" class="modal">
+        <div class="modal-content">
+            <span class="close">&times;</span>
+            <h2>Créer une nouvelle table</h2>
+            <label for="tableName">Nom de la table :</label>
+            <input type="text" id="tableName" placeholder="Nom de la table" required>
+            <label for="blinds">Blinds :</label>
+            <input type="text" id="blinds" placeholder="Ex: 2/5" required>
+            <label for="seats">Nombre de sièges :</label>
+            <input type="number" id="seats" placeholder="Nombre de sièges" required>
+            <button id="submitCreateTable">Créer la table</button>
+        </div>
+    </div>
+
+    <script src="js/cash_game.js"></script>
+</body>
+</html>

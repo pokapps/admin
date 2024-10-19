@@ -1,0 +1,224 @@
+const express = require('express');
+const jwt = require('jsonwebtoken');
+const bcrypt = require('bcryptjs');
+const sqlite3 = require('sqlite3').verbose();
+const NodeCache = require('node-cache');
+const morgan = require('morgan');
+const fs = require('fs');
+const path = require('path'); // Gérer les chemins
+const app = express();
+const port = 3000;
+
+app.use(express.json());
+
+const SECRET_KEY = "votre_secret_jwt";
+const REFRESH_SECRET_KEY = "votre_secret_refresh_jwt"; // Clé séparée pour les tokens de rafraîchissement
+
+// Initialiser le cache avec une durée de 60 secondes
+const cache = new NodeCache({ stdTTL: 60 });
+
+// Connexion à la base de données SQLite dans /db/revenus.db
+const db = new sqlite3.Database(path.join(__dirname, 'db', 'revenus.db'), (err) => {
+    if (err) {
+        console.error('Erreur de connexion à SQLite:', err.message);
+    } else {
+        console.log('Connecté à la base de données SQLite.');
+    }
+});
+
+// Créer une table pour la liste noire des tokens de rafraîchissement
+db.run(`CREATE TABLE IF NOT EXISTS revoked_tokens (
+    token TEXT
+)`);
+
+// Middleware pour les logs des requêtes HTTP
+app.use(morgan('combined'));
+
+// Middleware pour activer CORS
+app.use((req, res, next) => {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    next();
+});
+
+// Fonction pour écrire des logs dans un fichier situé dans /logs/audit.log
+function logAction(action) {
+    const logMessage = `[${new Date().toISOString()}] ${action}\n`;
+    const logPath = path.join(__dirname, 'logs', 'audit.log');
+    fs.appendFileSync(logPath, logMessage);
+}
+
+// Middleware pour vérifier le token JWT et les rôles
+function authenticateToken(req, res, next) {
+    const authHeader = req.headers['authorization'];
+    const token = authHeader && authHeader.split(' ')[1];
+
+    if (token == null) return res.sendStatus(401); // Non authentifié
+
+    jwt.verify(token, SECRET_KEY, (err, user) => {
+        if (err) return res.sendStatus(403); // Token non valide
+        req.user = user;
+        next();
+    });
+}
+
+function authorizeRole(role) {
+    return (req, res, next) => {
+        if (req.user.role !== role) {
+            return res.status(403).json({ message: 'Accès refusé. Permission insuffisante.' });
+        }
+        next();
+    };
+}
+
+// API pour générer un token JWT (route de connexion)
+app.post('/login', (req, res) => {
+    const { username, password } = req.body;
+    const user = users.find(u => u.username === username);
+
+    if (!user) {
+        return res.status(400).json({ message: 'Utilisateur non trouvé' });
+    }
+
+    bcrypt.compare(password, user.password, (err, isMatch) => {
+        if (!isMatch) {
+            return res.status(400).json({ message: 'Mot de passe incorrect' });
+        }
+
+        const token = jwt.sign({ username: user.username, role: user.role }, SECRET_KEY, { expiresIn: '15m' });
+        const refreshToken = jwt.sign({ username: user.username }, REFRESH_SECRET_KEY, { expiresIn: '7d' });
+
+        logAction(`Connexion réussie pour l'utilisateur ${user.username}`);
+        res.json({ token, refreshToken });
+    });
+});
+
+// API pour rafraîchir le token JWT
+app.post('/token', (req, res) => {
+    const { refreshToken } = req.body;
+
+    if (refreshToken == null) return res.sendStatus(401);
+
+    // Vérifier si le token est dans la liste noire
+    db.get('SELECT token FROM revoked_tokens WHERE token = ?', [refreshToken], (err, row) => {
+        if (err) return res.status(500).json({ error: err.message });
+        if (row) return res.status(403).json({ message: 'Token révoqué.' });
+
+        jwt.verify(refreshToken, REFRESH_SECRET_KEY, (err, user) => {
+            if (err) return res.sendStatus(403);
+
+            const newToken = jwt.sign({ username: user.username, role: user.role }, SECRET_KEY, { expiresIn: '15m' });
+            logAction(`Nouveau token généré pour l'utilisateur ${user.username}`);
+            res.json({ token: newToken });
+        });
+    });
+});
+
+// API pour révoquer un token de rafraîchissement (par exemple lors de la déconnexion)
+app.post('/logout', authenticateToken, (req, res) => {
+    const { refreshToken } = req.body;
+
+    if (!refreshToken) return res.status(400).json({ message: 'Refresh token manquant.' });
+
+    // Ajouter le token à la liste noire
+    db.run('INSERT INTO revoked_tokens (token) VALUES (?)', [refreshToken], (err) => {
+        if (err) return res.status(500).json({ error: err.message });
+
+        logAction(`Token de rafraîchissement révoqué pour l'utilisateur ${req.user.username}`);
+        res.json({ message: 'Déconnexion réussie et token révoqué.' });
+    });
+});
+
+// API protégée pour accéder aux données (disponible pour les utilisateurs authentifiés)
+app.get('/api/revenus', authenticateToken, (req, res) => {
+    const period = req.query.period;
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 6;
+    const offset = (page - 1) * limit;
+
+    const cacheKey = `revenus_${period}_page_${page}`;
+    const cachedData = cache.get(cacheKey);
+
+    if (cachedData) {
+        logAction(`Accès aux revenus (page ${page}) par l'utilisateur ${req.user.username} depuis le cache.`);
+        return res.json(cachedData);
+    }
+
+    let query = '';
+    if (period === '6mois') {
+        query = `SELECT * FROM revenus LIMIT ${limit} OFFSET ${offset}`;
+    } else if (period === '12mois') {
+        query = `SELECT * FROM revenus LIMIT ${limit} OFFSET ${offset}`;
+    }
+
+    db.all(query, [], (err, rows) => {
+        if (err) {
+            return res.status(500).json({ error: err.message });
+        }
+
+        const data = rows.map(row => row.montant);
+        cache.set(cacheKey, { values: data });
+
+        logAction(`Accès aux revenus (page ${page}) par l'utilisateur ${req.user.username} depuis SQLite.`);
+        res.json({ values: data, page });
+    });
+});
+
+// API protégée pour mettre à jour les données (seul un administrateur peut le faire)
+app.post('/api/revenus/update', authenticateToken, authorizeRole('admin'), (req, res) => {
+    const { mois, montant } = req.body;
+
+    const query = `UPDATE revenus SET montant = ? WHERE mois = ?`;
+    db.run(query, [montant, mois], function (err) {
+        if (err) {
+            return res.status(500).json({ error: err.message });
+        }
+
+        cache.flushAll();
+        logAction(`Mise à jour des revenus pour le mois ${mois} par l'administrateur ${req.user.username}.`);
+        res.json({ message: 'Revenus mis à jour avec succès et cache invalidé.' });
+    });
+});
+
+// Route pour récupérer les logs d'audit dans /logs/audit.log
+app.get('/logs', (req, res) => {
+    const logPath = path.join(__dirname, 'logs', 'audit.log'); // Chemin du fichier de log
+
+    // Lire le fichier de log
+    fs.readFile(logPath, 'utf8', (err, data) => {
+        if (err) {
+            return res.status(500).json({ error: 'Erreur de lecture des logs.' });
+        }
+
+        // Envoyer les logs sous forme de tableau de lignes
+        res.json({ logs: data.split('\n').filter(line => line) }); // Diviser les logs en lignes
+    });
+});
+
+// Route pour récupérer tous les tokens révoqués
+app.get('/revoked-tokens', (req, res) => {
+    db.all('SELECT token FROM revoked_tokens', [], (err, rows) => {
+        if (err) {
+            return res.status(500).json({ error: 'Erreur lors de la récupération des tokens révoqués.' });
+        }
+
+        res.json({ tokens: rows }); // Envoyer la liste des tokens révoqués
+    });
+});
+
+// Route pour supprimer un token révoqué spécifique
+app.delete('/revoked-tokens/:token', (req, res) => {
+    const token = req.params.token;
+
+    db.run('DELETE FROM revoked_tokens WHERE token = ?', [token], function (err) {
+        if (err) {
+            return res.status(500).json({ error: 'Erreur lors de la suppression du token révoqué.' });
+        }
+
+        res.json({ message: 'Token révoqué supprimé avec succès.' });
+    });
+});
+
+// Démarrer le serveur
+app.listen(port, () => {
+    console.log(`Serveur en cours d'exécution sur http://localhost:${port}`);
+});
